@@ -130,24 +130,23 @@ pipeline {
             }
         }
 
-        stage('OWASP Dependency Check') {
-            steps {
-                 script {
-
-            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE')
-              {
+      stage('OWASP Dependency Check') {
+    steps {
+        script {
+            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                 dependencyCheck additionalArguments: '''
                     --scan ./
                     --disableYarnAudit
                     --disableNodeAudit
-                    --data ./odc-data
+                    --data /var/jenkins_home/odc-data
                 ''',
                 odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-             }
-           }
-         }
-       }
+            }
+        }
+    }
+}
+
 
         stage('Trivy File System Scan') {
             steps {
@@ -193,18 +192,19 @@ pipeline {
     }
 }
 
-        stage('Deploy to Container') {
-            steps {
+       stage('Docker Scout Image Scan') {
+    steps {
+        script {
+            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                 sh '''
-                docker rm -f starbucks || true
-                docker run -d \
-                  --name starbucks \
-                  -p 3000:3000 \
-                  shubhamsharma01/starbucks:latest
+                docker-scout quickview shubhamsharma01/starbucks:latest || true
+                docker-scout cves shubhamsharma01/starbucks:latest || true
+                docker-scout recommendations shubhamsharma01/starbucks:latest || true
                 '''
             }
         }
     }
+
 
     post {
         always {
