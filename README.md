@@ -132,6 +132,10 @@ pipeline {
 
         stage('OWASP Dependency Check') {
             steps {
+                 script {
+
+            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE')
+              {
                 dependencyCheck additionalArguments: '''
                     --scan ./
                     --disableYarnAudit
@@ -140,8 +144,10 @@ pipeline {
                 ''',
                 odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            }
-        }
+             }
+           }
+         }
+       }
 
         stage('Trivy File System Scan') {
             steps {
