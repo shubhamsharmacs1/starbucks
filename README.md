@@ -130,23 +130,22 @@ pipeline {
             }
         }
 
-      stage('OWASP Dependency Check') {
-    steps {
-        script {
-            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                dependencyCheck additionalArguments: '''
-                    --scan ./
-                    --disableYarnAudit
-                    --disableNodeAudit
-                    --data /var/jenkins_home/odc-data
-                ''',
-                odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+        stage('OWASP Dependency Check') {
+            steps {
+                script {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                        dependencyCheck additionalArguments: '''
+                            --scan ./
+                            --disableYarnAudit
+                            --disableNodeAudit
+                            --data /var/jenkins_home/odc-data
+                        ''',
+                        odcInstallation: 'DP-Check'
+                        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                    }
+                }
             }
         }
-    }
-}
-
 
         stage('Trivy File System Scan') {
             steps {
@@ -178,33 +177,31 @@ pipeline {
         }
 
         stage('Docker Scout Image Scan') {
-    steps {
-        withDockerRegistry(
-            credentialsId: 'docker',
-            url: 'https://index.docker.io/v1/'
-        ) {
-            sh '''
-            docker-scout quickview shubhamsharma01/starbucks:latest
-            docker-scout cves shubhamsharma01/starbucks:latest
-            docker-scout recommendations shubhamsharma01/starbucks:latest
-            '''
+            steps {
+                script {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                        sh '''
+                        docker-scout quickview shubhamsharma01/starbucks:latest || true
+                        docker-scout cves shubhamsharma01/starbucks:latest || true
+                        docker-scout recommendations shubhamsharma01/starbucks:latest || true
+                        '''
+                    }
+                }
+            }
         }
-    }
-}
 
-       stage('Docker Scout Image Scan') {
-    steps {
-        script {
-            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+        stage('Deploy to Container') {
+            steps {
                 sh '''
-                docker-scout quickview shubhamsharma01/starbucks:latest || true
-                docker-scout cves shubhamsharma01/starbucks:latest || true
-                docker-scout recommendations shubhamsharma01/starbucks:latest || true
+                docker rm -f starbucks || true
+                docker run -d \
+                  --name starbucks \
+                  -p 3000:3000 \
+                  shubhamsharma01/starbucks:latest
                 '''
             }
         }
     }
-
 
     post {
         always {
@@ -214,15 +211,9 @@ pipeline {
                 body: """
                 <html>
                 <body>
-                    <div style="background-color:#FFA07A;padding:10px;">
-                        <b>Project:</b> ${env.JOB_NAME}
-                    </div>
-                    <div style="background-color:#90EE90;padding:10px;">
-                        <b>Build Number:</b> ${env.BUILD_NUMBER}
-                    </div>
-                    <div style="background-color:#87CEEB;padding:10px;">
-                        <b>Build URL:</b> ${env.BUILD_URL}
-                    </div>
+                    <b>Project:</b> ${env.JOB_NAME}<br/>
+                    <b>Build Number:</b> ${env.BUILD_NUMBER}<br/>
+                    <b>Build URL:</b> ${env.BUILD_URL}
                 </body>
                 </html>
                 """,
@@ -233,4 +224,3 @@ pipeline {
         }
     }
 }
-
