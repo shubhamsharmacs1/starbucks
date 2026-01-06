@@ -78,111 +78,153 @@ curl -sSfL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh | 
 ```
 pipeline {
     agent any
+
     tools {
         jdk 'jdk17'
         nodejs 'node16'
     }
+
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME = tool 'sonar-scanner'
     }
+
     stages {
-        stage ("clean workspace") {
+
+        stage('Clean Workspace') {
             steps {
                 cleanWs()
             }
         }
-        stage ("Git checkout") {
+
+        stage('Git Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/shubhamsharmacs1/starbucks.git'
+                git branch: 'main',
+                    url: 'https://github.com/shubhamsharmacs1/starbucks.git'
             }
         }
-        stage("Sonarqube Analysis "){
-            steps{
+
+        stage('SonarQube Analysis') {
+            steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=starbucks \
-                    -Dsonar.projectKey=starbucks '''
+                    sh '''
+                    $SCANNER_HOME/bin/sonar-scanner \
+                    -Dsonar.projectName=starbucks \
+                    -Dsonar.projectKey=starbucks
+                    '''
                 }
             }
         }
-        stage("quality gate"){
-           steps {
+
+        stage('Quality Gate') {
+            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                    waitForQualityGate abortPipeline: false,
+                        credentialsId: 'Sonar-token'
                 }
-            } 
-        }
-        stage("Install NPM Dependencies") {
-            steps {
-                sh "npm install"
             }
         }
-        stage('OWASP FS SCAN') {
+
+        stage('Install NPM Dependencies') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                sh 'npm install'
+            }
+        }
+
+        stage('OWASP Dependency Check') {
+            steps {
+                dependencyCheck additionalArguments: '''
+                    --scan ./
+                    --disableYarnAudit
+                    --disableNodeAudit
+                    --data ./odc-data
+                ''',
+                odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
-        stage ("Trivy File Scan") {
+
+        stage('Trivy File System Scan') {
             steps {
-                sh "trivy fs . > trivy.txt"
+                sh '''
+                mkdir -p ~/.cache/trivy
+                trivy fs . --cache-dir ~/.cache/trivy > trivy.txt
+                '''
             }
         }
-        stage ("Build Docker Image") {
+
+        stage('Build Docker Image') {
             steps {
-                sh "docker build -t starbucks ."
+                sh 'docker build -t starbucks .'
             }
         }
-        stage ("Tag & Push to DockerHub") {
+
+        stage('Tag & Push to DockerHub') {
             steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker') {
-                        sh "docker tag starbucks shubhamsharma01/starbucks:latest "
-                        sh "docker push shubhamsharma01/starbucks:latest "
-                    }
+                withDockerRegistry(
+                    credentialsId: 'docker',
+                    url: 'https://index.docker.io/v1/'
+                ) {
+                    sh '''
+                    docker tag starbucks shubhamsharma01/starbucks:latest
+                    docker push shubhamsharma01/starbucks:latest
+                    '''
                 }
             }
         }
-        stage('Docker Scout Image') {
-            steps {
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                       sh 'docker-scout quickview shubhamsharma01/starbucks:latest'
-                       sh 'docker-scout cves shubhamsharma01/starbucks:latest'
-                       sh 'docker-scout recommendations shubhamsharma01/starbucks:latest'
-                   }
-                }
-            }
-        }
-        stage ("Deploy to Conatiner") {
-            steps {
-                sh 'docker run -d --name starbucks -p 3000:3000 shubhamsharma01/starbucks:latest'
-            }
-        }
-    }
-    post {
-    always {
-        emailext attachLog: true,
-            subject: "'${currentBuild.result}'",
-            body: """
-                <html>
-                <body>
-                    <div style="background-color: #FFA07A; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">Project: ${env.JOB_NAME}</p>
-                    </div>
-                    <div style="background-color: #90EE90; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">Build Number: ${env.BUILD_NUMBER}</p>
-                    </div>
-                    <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">URL: ${env.BUILD_URL}</p>
-                    </div>
-                </body>
-                </html>
-            """,
-            to: 'shubhamsharmacs1@gmail.com',
-            mimeType: 'text/html',
-            attachmentsPattern: 'trivy.txt'
+
+        stage('Docker Scout Image Scan') {
+    steps {
+        withDockerRegistry(
+            credentialsId: 'docker',
+            url: 'https://index.docker.io/v1/'
+        ) {
+            sh '''
+            docker-scout quickview shubhamsharma01/starbucks:latest
+            docker-scout cves shubhamsharma01/starbucks:latest
+            docker-scout recommendations shubhamsharma01/starbucks:latest
+            '''
         }
     }
 }
 
-```
+        stage('Deploy to Container') {
+            steps {
+                sh '''
+                docker rm -f starbucks || true
+                docker run -d \
+                  --name starbucks \
+                  -p 3000:3000 \
+                  shubhamsharma01/starbucks:latest
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            emailext(
+                attachLog: true,
+                subject: "'${currentBuild.result}'",
+                body: """
+                <html>
+                <body>
+                    <div style="background-color:#FFA07A;padding:10px;">
+                        <b>Project:</b> ${env.JOB_NAME}
+                    </div>
+                    <div style="background-color:#90EE90;padding:10px;">
+                        <b>Build Number:</b> ${env.BUILD_NUMBER}
+                    </div>
+                    <div style="background-color:#87CEEB;padding:10px;">
+                        <b>Build URL:</b> ${env.BUILD_URL}
+                    </div>
+                </body>
+                </html>
+                """,
+                to: 'shubhamsharmacs1@gmail.com',
+                mimeType: 'text/html',
+                attachmentsPattern: 'trivy.txt'
+            )
+        }
+    }
+}
+
