@@ -93,7 +93,7 @@ pipeline {
         }
         stage ("Git checkout") {
             steps {
-                git branch: 'main', url: 'https://github.com/yeshwanthlm/starbucks.git'
+                git branch: 'main', url: 'https://github.com/shubhamsharmacs1/starbucks.git'
             }
         }
         stage("Sonarqube Analysis "){
@@ -136,8 +136,8 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker') {
-                        sh "docker tag starbucks amonkincloud/starbucks:latest "
-                        sh "docker push amonkincloud/starbucks:latest "
+                        sh "docker tag starbucks shubhamsharma01/starbucks:latest "
+                        sh "docker push shubhamsharma01/starbucks:latest "
                     }
                 }
             }
@@ -146,16 +146,16 @@ pipeline {
             steps {
                 script{
                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                       sh 'docker-scout quickview amonkincloud/starbucks:latest'
-                       sh 'docker-scout cves amonkincloud/starbucks:latest'
-                       sh 'docker-scout recommendations amonkincloud/starbucks:latest'
+                       sh 'docker-scout quickview shubhamsharma01/starbucks:latest'
+                       sh 'docker-scout cves shubhamsharma01/starbucks:latest'
+                       sh 'docker-scout recommendations shubhamsharma01/starbucks:latest'
                    }
                 }
             }
         }
         stage ("Deploy to Conatiner") {
             steps {
-                sh 'docker run -d --name starbucks -p 3000:3000 amonkincloud/starbucks:latest'
+                sh 'docker run -d --name starbucks -p 3000:3000 shubhamsharma01/starbucks:latest'
             }
         }
     }
