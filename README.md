@@ -176,20 +176,6 @@ pipeline {
             }
         }
 
-        stage('Docker Scout Image Scan') {
-            steps {
-                script {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                        sh '''
-                        docker-scout quickview shubhamsharma01/starbucks:latest || true
-                        docker-scout cves shubhamsharma01/starbucks:latest || true
-                        docker-scout recommendations shubhamsharma01/starbucks:latest || true
-                        '''
-                    }
-                }
-            }
-        }
-
         stage('Deploy to Container') {
             steps {
                 sh '''
